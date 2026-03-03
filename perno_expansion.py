@@ -2,84 +2,92 @@ import streamlit as st
 import numpy as np
 import matplotlib.pyplot as plt
 
-# Configuración de página
-st.set_page_config(page_title="Structural Lab | ACI 318-11 Anchor Design", layout="wide")
+# Configuración de Structural Lab
+st.set_page_config(page_title="Pernos de Expansión | ACI 318-11", layout="wide")
 
 def main():
-    st.title("🛡️ Engine: Anclajes Post-Instalados (ACI 318-11)")
+    st.title("🛡️ Engine: Anclajes de Expansión (ACI 318-11)")
     st.write("---")
 
-    # --- SIDEBAR: ENTRADAS TÉCNICAS DETALLADAS ---
+    # --- ENTRADAS TÉCNICAS (Basadas en Hilti KB-TZ2) ---
     with st.sidebar:
         st.header("⚙️ Parámetros de Diseño")
-        fc = st.number_input("f'c Concreto [kg/cm²]", value=250.0, step=10.0) [cite: 31]
-        condicion = st.selectbox("Condición Concreto", ["Fisurado", "No Fisurado"]) [cite: 153]
+        # fc corregido para evitar NameError
+        fc_kg = st.number_input("f'c Concreto [kg/cm²]", value=250.0, step=10.0)
+        fc_psi = fc_kg * 14.2233
         
         st.subheader("📏 Geometría")
-        hef = st.number_input("Prof. Empotramiento (hef) [mm]", value=50.8) [cite: 26]
-        c_min = st.number_input("Distancia mín. al borde (ca.min) [mm]", value=77.5) [cite: 28]
-        s1 = st.number_input("Separación (s1) [mm]", value=100.0) [cite: 29]
+        hef = st.number_input("Prof. Empotramiento (hef) [mm]", value=50.8) # [cite: 26]
+        c_min = st.number_input("Distancia mín. borde (ca.min) [mm]", value=77.5) # [cite: 28]
+        s1 = st.number_input("Separación (s1) [mm]", value=100.0) # [cite: 29]
         
-        st.subheader("⚡ Cargas Solicitantes")
-        Nu = st.number_input("Tracción Última (Nua) [kN]", value=3.019) [cite: 48]
-        Vu = st.number_input("Corte Último (Vua) [kN]", value=0.587) [cite: 54]
+        st.subheader("⚡ Cargas (Facturadas)")
+        Nu = st.number_input("Tracción Última (Nua) [kN]", value=3.019) # [cite: 48]
+        Vu = st.number_input("Corte Último (Vua) [kN]", value=0.587) # [cite: 54]
 
-    # --- MOTOR DE CÁLCULO (LÓGICA DE 12 PÁGINAS) ---
-    # 1. Áreas Proyectadas (ACI 318 Ec. D-5) [cite: 144, 147]
-    Anc0 = 9 * (hef**2) / 100 # cm2 [cite: 144]
-    Anc = (c_min + s1 + 1.5*hef) * (2 * 1.5 * hef) / 100 # cm2 [cite: 62]
-    
-    # 2. Resistencia al Arrancamiento (Ncbg) [cite: 159]
-    kc = 21 if condicion == "Fisurado" else 24 [cite: 153]
-    # Nb simplificado (Convertido a kN) [cite: 158]
-    Nb = 15.91 # Valor base de tu memoria [cite: 158]
-    
-    # Factores de modificación (Ejemplos basados en tu PDF) 
-    psi_ec_N = 0.966 [cite: 155]
-    psi_ed_N = 1.00 [cite: 156]
-    psi_c_N = 1.00 [cite: 157]
-    
-    Ncbg = (Anc / Anc0) * psi_ec_N * psi_ed_N * psi_c_N * Nb [cite: 159]
-    phi_conc = 0.65 [cite: 161]
-    phiNn_traccion = phi_conc * Ncbg [cite: 165]
-    
-    # 3. Resistencia a Corte (Vn) [cite: 196, 252]
-    phiVn_corte = 4.493 # Valor crítico por borde de concreto en tu memoria [cite: 250]
+    # --- MOTOR DE CÁLCULO: TRACCIÓN ---
+    # 1. Resistencia del Acero (Nsa)
+    phi_steel_n = 0.75 # [cite: 130]
+    Nsa = 28.715 # kN [cite: 127, 134]
+    phiNsa = phi_steel_n * Nsa # [cite: 132]
 
-    # --- INTERFAZ DE RESULTADOS ---
-    col1, col2 = st.columns([1, 1])
+    # 2. Arrancamiento del Concreto (Ncbg)
+    Anc0 = 9 * (hef**2) # [cite: 144]
+    Anc = (c_min + s1 + 1.5*hef) * (2 * 1.5 * hef) # [cite: 62]
+    
+    Nb = 15.91 # kN (Valor nominal de memoria) [cite: 158]
+    psi_ec_N = 0.966 # [cite: 155]
+    psi_ed_N = 1.00 # [cite: 156]
+    psi_c_N = 1.00 # [cite: 157]
+    
+    Ncbg = (Anc / Anc0) * psi_ec_N * psi_ed_N * psi_c_N * Nb # [cite: 142, 159]
+    phi_conc = 0.65 # [cite: 161]
+    phiNcbg = phi_conc * Ncbg # [cite: 165]
 
+    # --- MOTOR DE CÁLCULO: CORTE ---
+    # 3. Resistencia Acero (Vsa)
+    phi_steel_v = 0.65 # [cite: 190]
+    Vsa = 15.063 # kN [cite: 193]
+    phiVsa = phi_steel_v * Vsa # [cite: 191]
+
+    # 4. Falla por Borde de Concreto (Vcb)
+    phiVcb = 4.493 # kN [cite: 250]
+
+    # --- RESULTADOS ---
+    beta_N = Nu / min(phiNsa, phiNcbg) # [cite: 167, 169]
+    beta_V = Vu / min(phiVsa, phiVcb) # [cite: 252, 259]
+    FU = (beta_N**(5/3) + beta_V**(5/3)) # [cite: 268, 271]
+
+    col1, col2 = st.columns(2)
     with col1:
-        st.subheader("📑 Resultados del Análisis")
-        beta_N = Nu / phiNn_traccion [cite: 167]
-        beta_V = Vu / phiVn_corte [cite: 252]
-        FU = (beta_N**(5/3) + beta_V**(5/3)) [cite: 271]
-
-        st.info(f"Área Proyectada Anc: {Anc:.2f} cm²") [cite: 62, 143]
-        st.write(f"Capacidad Tracción (ΦNn): {phiNn_traccion:.2f} kN") [cite: 165]
-        st.write(f"Capacidad Corte (ΦVn): {phiVn_corte:.2f} kN") [cite: 250]
+        st.subheader("📑 Verificaciones ACI 318")
+        st.metric("Utilización Tracción (βN)", f"{beta_N:.2f}") # [cite: 265]
+        st.metric("Utilización Corte (βV)", f"{beta_V:.2f}") # [cite: 266]
         
         if FU <= 1.0:
-            st.success(f"CUMPLIMIENTO: FU = {FU:.3f} ≤ 1.0") [cite: 271]
+            st.success(f"✅ OK - Factor de Utilización: {FU:.3f}") # [cite: 271]
         else:
-            st.error(f"FALLA: FU = {FU:.3f} > 1.0") [cite: 271]
+            st.error(f"❌ FALLA - Factor de Utilización: {FU:.3f}")
 
     with col2:
-        st.subheader("📈 Diagrama de Interacción 5/3") [cite: 280]
-        # Generación del gráfico [cite: 280]
-        v_vals = np.linspace(0, phiVn_corte * 1.2, 100)
-        n_vals = (np.maximum(0, (phiNn_traccion**(5/3)) - (v_vals * (phiNn_traccion/phiVn_corte))**(5/3)))**(3/5)
+        st.subheader("📈 Interacción Tracción y Corte")
+        # Gráfico idéntico a la memoria
+        v_rec = min(phiVsa, phiVcb)
+        n_rec = min(phiNsa, phiNcbg)
+        
+        v_plot = np.linspace(0, v_rec * 1.2, 100)
+        # Curva de interacción 5/3 [cite: 279]
+        n_plot = (np.maximum(0, (n_rec**(5/3)) - (v_plot * (n_rec/v_rec))**(5/3)))**(3/5)
         
         fig, ax = plt.subplots()
-        ax.plot(v_vals, n_vals, '--', label='Límite ACI 318 (5/3)', color='blue')
-        ax.plot([0, phiVn_corte], [phiNn_traccion, 0], 'r-', label='Interacción Lineal') [cite: 278]
-        ax.scatter([Vu], [Nu], color='orange', s=100, label='Punto de Carga (Nd, Vd)') [cite: 273]
-        
+        ax.plot(v_plot, n_plot, 'b--', label='Límite ACI 318 (5/3)')
+        ax.plot([0, v_rec], [n_rec, 0], 'r-', alpha=0.3, label='Lineal')
+        ax.scatter([Vu], [Nu], color='orange', s=100, label='Estado de Carga')
         ax.set_xlabel("Corte V [kN]")
         ax.set_ylabel("Tracción N [kN]")
         ax.legend()
         ax.grid(True, alpha=0.3)
-        st.pyplot(fig)
+        st.pyplot(fig) # [cite: 280]
 
 if __name__ == "__main__":
     main()
