@@ -7,7 +7,7 @@ import pandas as pd
 st.set_page_config(page_title="Structural Lab | ACI 318-11 Expansion Anchor", layout="wide")
 
 def main():
-    st.title("🛡️ Engine: Anclajes de Expansión (ACI 318-11)")
+    st.title("🛡️ Pernos de Expansión (ACI 318-11)")
     
     # --- BLOQUE DE ALERTAS TÉCNICAS (AMPLIADO) ---
     st.info("⚠️ **Nota Técnica**: El análisis de tensiones y distribución de cargas se basa en el supuesto de placa base rígida.")
